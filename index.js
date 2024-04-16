@@ -13,8 +13,11 @@ import {
   addDoc,
   collection,
   getFirestore,
+  query,
   onSnapshot,
   serverTimestamp,
+  where,
+  orderBy,
 } from "firebase/firestore";
 
 /* === Firebase Setup === */
@@ -56,6 +59,10 @@ const moodEmojiEls = document.getElementsByClassName("mood-emoji-btn");
 const textareaEl = document.getElementById("post-input");
 const postButtonEl = document.getElementById("post-btn");
 
+const allFilterButtonEl = document.getElementById("all-filter-btn");
+
+const filterButtonEls = document.getElementsByClassName("filter-btn");
+
 const postsEl = document.getElementById("posts");
 
 /* == UI - Event Listeners == */
@@ -73,6 +80,10 @@ for (let moodEmojiEl of moodEmojiEls) {
   moodEmojiEl.addEventListener("click", selectMood);
 }
 
+for (let filterButtonEl of filterButtonEls) {
+  filterButtonEl.addEventListener("click", selectFilter);
+}
+
 /* === State === */
 
 let moodState = 0;
@@ -88,7 +99,8 @@ onAuthStateChanged(auth, (user) => {
     showLoggedInView();
     showProfilePicture(userProfilePictureEl, user);
     showUserGreeting(userGreetingEl, user);
-    fetchInRealtimeAndRenderPostsFromDB();
+    updateFilterButtonStyle(allFilterButtonEl);
+    fetchPostsFromPeriod("all", user);
   } else {
     showLoggedOutView();
   }
@@ -158,14 +170,99 @@ async function addPostToDB(postBody, user) {
   }
 }
 
-function fetchInRealtimeAndRenderPostsFromDB() {
-  onSnapshot(collection(db, collectionName), (querySnapshot) => {
+function fetchInRealtimeAndRenderPostsFromDB(query, user) {
+  onSnapshot(query, (querySnapshot) => {
     clearAll(postsEl);
 
     querySnapshot.forEach((doc) => {
       renderPost(postsEl, doc.data());
     });
   });
+}
+
+function fetchTodayPosts(user) {
+  const startOfDay = new Date();
+  startOfDay.setHours(0, 0, 0, 0);
+
+  const endOfDay = new Date();
+  endOfDay.setHours(23, 59, 59, 999);
+
+  const postsRef = collection(db, collectionName);
+
+  const q = query(
+    postsRef,
+    where("uid", "==", user.uid),
+    where("createdAt", ">=", startOfDay),
+    where("createdAt", "<=", endOfDay),
+    orderBy("createdAt", "desc")
+  );
+
+  fetchInRealtimeAndRenderPostsFromDB(q, user);
+}
+
+function fetchWeekPosts(user) {
+  const startOfWeek = new Date();
+  startOfWeek.setHours(0, 0, 0, 0);
+
+  if (startOfWeek.getDay() === 0) {
+    startOfWeek.setDate(startOfWeek.getDate() - 6);
+  } else {
+    startOfWeek.setDate(startOfWeek.getDate() - startOfWeek.getDay() + 1);
+
+    const endOfWeek = new Date();
+    endOfWeek.setHours(23, 59, 59, 999);
+
+    const postsRef = collection(db, collectionName);
+
+    const q = query(
+      postsRef,
+      where("uid", "==", user.uid),
+      where("createdAt", ">=", startOfWeek),
+      where("createdAt", "<=", endOfWeek),
+      orderBy("createdAt", "desc")
+    );
+    fetchInRealtimeAndRenderPostsFromDB(q, user);
+  }
+}
+
+function fetchMonthPosts(user) {
+  const startOfMonth = new Date();
+  startOfMonth.setHours(0, 0, 0, 0);
+  startOfMonth.setDate(1);
+
+  const endOfDay = new Date();
+  endOfDay.setHours(23, 59, 59, 999);
+
+  const postsRef = collection(db, collectionName);
+
+  const q = query(
+    postsRef,
+    where("uid", "==", user.uid),
+    where("createdAt", ">=", startOfMonth),
+    where("createdAt", "<=", endOfDay),
+    orderBy("createdAt", "desc")
+  );
+
+  fetchInRealtimeAndRenderPostsFromDB(q, user);
+}
+
+function fetchAllPosts(user) {
+  const postsRef = collection(db, collectionName);
+  const q = query(postsRef, where("uid", "==", user.uid), orderBy("createdAt", "desc"));
+
+  fetchInRealtimeAndRenderPostsFromDB(q, user);
+}
+
+function fetchPostsFromPeriod(period, user) {
+  if (period === "today") {
+    fetchTodayPosts(user);
+  } else if (period === "week") {
+    fetchWeekPosts(user);
+  } else if (period === "month") {
+    fetchMonthPosts(user);
+  } else {
+    fetchAllPosts(user);
+  }
 }
 
 /* == Functions - UI Functions == */
@@ -316,4 +413,32 @@ function resetAllMoodElements(allMoodElements) {
 
 function returnMoodValueFromElementId(elementId) {
   return Number(elementId.slice(5));
+}
+
+/* == Functions - UI Functions - Date Filters == */
+
+function resetAllFilterButtons(allFilterButtons) {
+  for (let filterButtonEl of allFilterButtons) {
+    filterButtonEl.classList.remove("selected-filter");
+  }
+}
+
+function updateFilterButtonStyle(element) {
+  element.classList.add("selected-filter");
+}
+
+function selectFilter(event) {
+  const user = auth.currentUser;
+
+  const selectedFilterElementId = event.target.id;
+
+  const selectedFilterPeriod = selectedFilterElementId.split("-")[0];
+
+  const selectedFilterElement = document.getElementById(selectedFilterElementId);
+
+  resetAllFilterButtons(filterButtonEls);
+
+  updateFilterButtonStyle(selectedFilterElement);
+
+  fetchPostsFromPeriod(selectedFilterPeriod, user);
 }
