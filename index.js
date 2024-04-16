@@ -3,11 +3,12 @@ import { initializeApp } from "firebase/app";
 import {
   getAuth,
   onAuthStateChanged,
+  createUserWithEmailAndPassword,
+  signInWithEmailAndPassword,
   signOut,
   GoogleAuthProvider,
   signInWithPopup,
 } from "firebase/auth";
-import { createUserWithEmailAndPassword, signInWithEmailAndPassword } from "firebase/auth";
 import {
   addDoc,
   collection,
