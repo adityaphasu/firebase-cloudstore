@@ -18,6 +18,9 @@ import {
   serverTimestamp,
   where,
   orderBy,
+  doc,
+  updateDoc,
+  deleteDoc,
 } from "firebase/firestore";
 
 /* === Firebase Setup === */
@@ -170,12 +173,24 @@ async function addPostToDB(postBody, user) {
   }
 }
 
-function fetchInRealtimeAndRenderPostsFromDB(query, user) {
+async function updatePostInDB(docId, newBody) {
+  const postRef = doc(db, collectionName, docId);
+
+  await updateDoc(postRef, {
+    body: newBody,
+  });
+}
+
+async function deletePostFromDB(docId) {
+  await deleteDoc(doc(db, collectionName, docId));
+}
+
+function fetchInRealtimeAndRenderPostsFromDB(query) {
   onSnapshot(query, (querySnapshot) => {
     clearAll(postsEl);
 
     querySnapshot.forEach((doc) => {
-      renderPost(postsEl, doc.data());
+      renderPost(postsEl, doc);
     });
   });
 }
@@ -267,16 +282,79 @@ function fetchPostsFromPeriod(period, user) {
 
 /* == Functions - UI Functions == */
 
-function renderPost(postsEl, postData) {
-  postsEl.innerHTML += `
-  <div class="post">
-    <div class="header">
-    <p>${displayDate(postData.createdAt)}</p>
-    <img src="/assets/emojis/${postData.mood}.png" alt="Mood Emoji">
-    </div>
-    <p>${replaceNewlinesWithBrTags(postData.body)}</p>
-  </div>
-  `;
+function createPostHeader(postData) {
+  const headerDiv = document.createElement("div");
+  headerDiv.className = "header";
+
+  const headerDate = document.createElement("h3");
+  headerDate.textContent = displayDate(postData.createdAt);
+  headerDiv.appendChild(headerDate);
+
+  const moodImage = document.createElement("img");
+  moodImage.src = `assets/emojis/${postData.mood}.png`;
+  headerDiv.appendChild(moodImage);
+
+  return headerDiv;
+}
+
+function createPostBody(postData) {
+  const postBody = document.createElement("p");
+  postBody.innerHTML = replaceNewlinesWithBrTags(postData.body);
+
+  return postBody;
+}
+
+function createPostUpdateButton(doc) {
+  const postId = doc.id;
+  const postData = doc.data();
+
+  const button = document.createElement("button");
+  button.textContent = "Edit";
+  button.classList.add("edit-color");
+  button.addEventListener("click", function () {
+    const newBody = prompt("Edit the post", postData.body);
+
+    if (newBody) {
+      updatePostInDB(postId, newBody);
+    }
+  });
+
+  return button;
+}
+
+function createPostDeleteButton(wholeDoc) {
+  const postId = wholeDoc.id;
+
+  const button = document.createElement("button");
+  button.textContent = "Delete";
+  button.classList.add("delete-color");
+  button.addEventListener("click", function () {
+    deletePostFromDB(postId);
+  });
+  return button;
+}
+
+function createPostFooter(doc) {
+  const footerDiv = document.createElement("div");
+  footerDiv.className = "footer";
+
+  footerDiv.appendChild(createPostUpdateButton(doc));
+  footerDiv.appendChild(createPostDeleteButton(doc));
+
+  return footerDiv;
+}
+
+function renderPost(postsEl, doc) {
+  const postData = doc.data();
+
+  const postDiv = document.createElement("div");
+  postDiv.className = "post";
+
+  postDiv.appendChild(createPostHeader(postData));
+  postDiv.appendChild(createPostBody(postData));
+  postDiv.appendChild(createPostFooter(doc));
+
+  postsEl.appendChild(postDiv);
 }
 
 function replaceNewlinesWithBrTags(inputString) {
